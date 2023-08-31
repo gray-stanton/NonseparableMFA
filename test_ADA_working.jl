@@ -436,7 +436,7 @@ end
 
 #fit_MM_phi(xs, Ds1, A0, Diagonal(I(n)))
 
-#out = fit_MM(xs, Ds1, Ainit; maxiter=5000)
+out = fit_MM(xs, Ds1, Ainit; maxiter=5000)
 
 
 

@@ -5,55 +5,6 @@ using OffsetArrays
 
 # Structure of MFA parameters and associated
 
-struct ChannelSpec
-    C :: Int
-    Ncs :: Vector{Int} # Sizes of the Channels (Ncs[i]>0), length is C
-    N :: Int # Total number of observations, == sum(Ncs)
-    r0 :: Int # Number of Common Factors
-    rcs :: Vector{Int} # Number of unique factors per channel, length is C
-    r :: Int # Total number of unique factors
-end
-ChannelSpec(Ncs, rcs, r0) = ChannelSpec(length(Ncs), Ncs, sum(Ncs), r0, rcs, sum(rcs))
-
-# Spline representation of matrix function L(w): [a, b] -> LowerTriangular
-struct MFACholeskyBSplineFunc{S<:Complex}
-    bs :: BSplineBasis # B-Spline basis for cholesky function
-    blockdims :: Vector{Int} # Row/col size of matrix function subblocks
-    totdim  :: Int # Total row/col size of matrix function
-    coeffs :: Vector{S} # Packed B-spline coefficients, Spl-> Chan -> col -> row
-end
-MFACholeskyBSplineFunc(bs :: BSplineBasis, blockdims :: Vector{Int}, paramtype=ComplexF64) = MFACholeskyBSplineFunc{paramtype}(
-    bs,
-    blockdims,
-    sum(blockdims),
-    zeros(paramtype, length(bs)* sum([s*(s+1)÷2 for s in blockdims]))
-)
-
-struct MFASpecDensBSplineFunc{S<:Complex}
-    L :: MFACholeskyBSplineFunc{S}
-end
-
-# Parameter object for MFA with dependent latent factors
-mutable struct MFADependent{T<:Real, S<:Complex}
-    A :: Matrix{T} # N x r_0 common factor loadings
-    B :: Matrix{T} # N x r  block-diagonal unique factor loadings
-    Bcs :: Array{Matrix{T}, 1} # C-length array of unique-factor loading blocks
-    C :: Matrix{T} # N x (r_0 +r) combined factor loadings, == [A B]
-    P :: Diagonal{T, Vector{T}} # N x N Diagonal matrix of idiosyncratic variances
-    L :: MFACholeskyBSplineFunc{S} # B-spline rep. of factor spectral density cholesky function
-    cs :: ChannelSpec # Specification of channel/factor structure
-end
-MFADependent(cs :: ChannelSpec, bs :: BSplineBasis, realparamtype=Float64, complexparamtype=ComplexF64) = MFADependent(
-    zeros(realparamtype, cs.N, cs.r0), # A
-    zeros(realparamtype, cs.N, cs.r), # B
-    [zeros(realparamtype, Nc, rc) for (Nc, rc) in zip(cs.Ncs, cs.rcs)], # Bcs
-    zeros(realparamtype, cs.N, cs.r0 + cs.r),
-    Diagonal(zeros(realparamtype, cs.N)), # P
-    MFACholeskyBSplineFunc(bs, vcat([cs.r0], cs.rcs), complexparamtype),
-    cs
-)
-
-
 function blockdiag!(store, mats)
     ns = [size(mat)[1] for mat in mats]
     ms = [size(mat)[2] for mat in mats]
@@ -282,6 +233,16 @@ function identityintegral_invariant!(C :: Matrix{<:Real}, L :: MFACholeskyBSplin
     packLTsequence!(L.coeffs, Ltsnew, L.blockdims)
 end
 
+
+function unitloadings_invariant!(C :: Matrix{<:Real}, L :: MFACholeskyBSplineFunc)
+    cnorms = norm.(eachcol(C))
+    normalize!.(eachcol(C))
+    Lts = unpackLTsequence(L.coeffs, L.blockdims, length(L.bs))
+    Ltsnew = [diagm(cnorms) * Lts[k] for k in 1:length(L.bs)]
+    packLTsequence!(L.coeffs, Ltsnew, L.blockdims)
+end
+
+
 # Enforce that the diagonal of the cholesky factor be real and positive.
 function realdiag_invariant!(L :: MFACholeskyBSplineFunc)
     K = length(L.bs)
@@ -310,6 +271,21 @@ function realdiag_invariant2!(L)
                 idx = getelemidx(L.blockdims, K, k, c2-1, j, j)
                 v = L.coeffs[idx]
                 setelem(abs(v), L, k, c2-1, j, j)
+            end
+        end
+    end
+end
+
+# take real part of all diags, enforce that diag(L(0)) > 0 
+function realdiag_invariant3!(L)
+    K = length(L.bs)
+    C = length(L.blockdims)
+    for k in 1:K
+        for c2 in 1:C
+            for j in 1:L.blockdims[c2]
+                idx = getelemidx(L.blockdims, K, k, c2-1, j, j)
+                v = L.coeffs[idx]
+                setelem(real(v), L, k, c2-1, j, j)
             end
         end
     end
@@ -350,6 +326,7 @@ function extractABcs!(Astore, Bcsstore, C :: Matrix{<:Real})
     colblksizes = [size(Bc)[2] for Bc in Bcsstore]
     unblockdiag!(Bcsstore, C[:, (size(Astore)[2]+1):end], rowblksizes, colblksizes)
 end
+
 
 
 function lowertri_invariant(A :: Matrix{<:Real})

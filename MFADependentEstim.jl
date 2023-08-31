@@ -139,12 +139,20 @@ function time_fit(xs, model; ftol=1e-8, xtol=1e-5, maxiter=10000, Pfloor=1e-3, v
     return (mod, tr)
 end
 
+function EM_update_stepwise(zs, ws, model, iter; Pfloor)
+
+end
 
 
 function EM_update!(zs, ws, model; Pfloor)
+    println("Pre-P: $(QGML_objective(zs, ws, model))")
     updateP!(zs, ws, model; Pfloor=Pfloor)
+    println("Pre-AB: $(QGML_objective(zs, ws, model))")
     updateAB!(zs, ws, model)
+    println("Pre-L: $(QGML_objective(zs, ws, model))")
     updateL!(zs, ws, model)
+    #unitloadings_invariant!(model.C, model.L)
+    println("Pre-Ident: $(QGML_objective(zs, ws, model))")
     identityintegral_invariant!(model.C, model.L, ws)
     extractABcs!(model.A, model.Bcs, model.C)
     blockdiag!(model.B, model.Bcs)
@@ -267,19 +275,19 @@ function updateAB!(zs, ws, model)
     Psqinv = sqrt(Pinv)
     Cw = Psqinv * C
     zws = [Psqinv * z for z in zs]
-    CwtCw = Symmetric(Cw'*Cw)
+    CwtCw = (Cw'*Cw)
     Xis = [zeros(eltype(L.coeffs), L.totdim, L.totdim) for _ in 1:length(ws)]
     for (t, w) in enumerate(ws)
         Lv = L(w)
-        Xis[t] = Hermitian(Lv * inv(I + Lv'*CwtCw*Lv) * Lv')
+        Xis[t] = (Lv * inv(I + Lv'*CwtCw*Lv) * Lv')
     end
     # Compute least-square mats
-    Hs = 1/T*[Hermitian(Xis[t] + Xis[t]*Cw'*zws[t]*zws[t]'*Cw*Xis[t]) for t in 1:length(ws)]
+    Hs = 1/T*[(Xis[t] + Xis[t]*Cw'*zws[t]*zws[t]'*Cw*Xis[t]) for t in 1:length(ws)]
     Us = 1/T*[zws[t]*zws[t]'*Cw*Xis[t] for t in 1:length(ws)]
     H = sum(Hs)
     U = sum(Us)
     # Compute new C
-    Cwnew = real(U*inv(H))
+    Cwnew =real(U*inv(H))
     Cnew = sqrt(P) * Cwnew
     Anew, Bcsnew = extractABcs(Cnew, model.cs.Ncs, model.cs.r0, model.cs.rcs)
     lowertri_invariant!(Anew)
@@ -391,7 +399,7 @@ function updateL!(zs, ws, model)
     HQ = HQuadmat(ws, Hs, CwtCw, L.bs, L.blockdims)
     Uv = UVec(ws, Us, L.bs, L.blockdims)
     L.coeffs[:] =  (HQ \ Uv)
-    realdiag_invariant!(L) # Seems to be numerically unstable! Without the rot, minorizes perfectly.
+    realdiag_invariant3!(L) 
     return
 end
 
