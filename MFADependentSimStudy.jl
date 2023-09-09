@@ -1,4 +1,5 @@
 cd("/home/gray/code/")
+include("/home/gray/code/NonsepMFAJulia/MFADependent.jl")
 include("/home/gray/code/NonsepMFAJulia/MFADependentUtils.jl")
 include("/home/gray/code/NonsepMFAJulia/MFADependentEstim.jl")
 include("/home/gray/code/NonsepMFAJulia/MFADependentSample.jl")
@@ -63,11 +64,11 @@ using DataFrames
 
 include("/home/gray/code/NonsepMFAJulia/MFAIndependentEstim.jl")
 
-rng = MersenneTwister(1342) #1343
+rng = MersenneTwister(1343) #1343
 K = 4
 bs = BSplineBasis(4, pi*(0.0:1/4:1.0))
-Ncs = [10, 10]#[20, 15, 10]
-rcs = [2, 1]#[4, 3, 2]
+Ncs = [20, 15, 10]
+rcs = [4, 3, 2]
 r0 = 2
 cs = ChannelSpec(Ncs, rcs, r0)
 power_ratios_by_channel = [[0.3, 0.3, 0.4] for _ in 1:length(Ncs)]

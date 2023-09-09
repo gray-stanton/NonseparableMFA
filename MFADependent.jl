@@ -39,6 +39,7 @@ mutable struct MFADependent{T<:Real, S<:Complex}
     B :: Matrix{T} # N x r  block-diagonal unique factor loadings
     Bcs :: Array{Matrix{T}, 1} # C-length array of unique-factor loading blocks
     C :: Matrix{T} # N x (r_0 +r) combined factor loadings, == [A B]
+    Ccomp :: Matrix{S}
     P :: Diagonal{T, Vector{T}} # N x N Diagonal matrix of idiosyncratic variances
     L :: MFACholeskyBSplineFunc{S} # B-spline rep. of factor spectral density cholesky function
     cs :: ChannelSpec # Specification of channel/factor structure
@@ -48,6 +49,7 @@ MFADependent(cs :: ChannelSpec, bs :: BSplineBasis, realparamtype=Float64, compl
     zeros(realparamtype, cs.N, cs.r), # B
     [zeros(realparamtype, Nc, rc) for (Nc, rc) in zip(cs.Ncs, cs.rcs)], # Bcs
     zeros(realparamtype, cs.N, cs.r0 + cs.r),
+    zeros(complexparamtype, cs.N, cs.r0 + cs.r),
     Diagonal(zeros(realparamtype, cs.N)), # P
     MFACholeskyBSplineFunc(bs, vcat([cs.r0], cs.rcs), complexparamtype),
     cs

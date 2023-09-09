@@ -3,6 +3,7 @@ using BSplines
 using Statistics
 using OffsetArrays
 using FFTW
+using SparseArrays
 include("./MFADependentUtils.jl")
 
 
@@ -26,6 +27,183 @@ function QGML_objective(zs, ws, model :: MFADependent)
         H = I + Lv'*C'*Pinv*C*Lv
         tot += log(det(H)) + log(det(model.P))
         tot += z'*Pinv*z - z'*Pinv*C*Lv*inv(H)*Lv'*C'*Pinv*z
+    end
+    return real(tot)/length(zs)
+end
+
+
+function QGML_objective_comp(zs, ws, model :: MFADependent)
+    tot = 0.0
+    Pinv = inv(model.P)
+    C = model.Ccomp
+    for (z, w) in zip(zs, ws)
+        Lv = model.L(w)
+        H = I + Lv'*C'*Pinv*C*Lv
+        tot += log(det(H)) + log(det(model.P))
+        tot += z'*Pinv*z - z'*Pinv*C*Lv*inv(H)*Lv'*C'*Pinv*z
+    end
+    return real(tot)/length(zs)
+end
+
+
+function AB_minorizing_obj_parts(zs, ws, Cnew, model_old)
+    C, L, P= model_old.C, model_old.L, model_old.P
+    Pinv = inv(P)
+    T = length(ws)
+    Psqinv = sqrt(Pinv)
+    Cw = Psqinv * C
+    zws = [Psqinv * z for z in zs]
+    CwtCw = (Cw'*Cw)
+    Xis = [zeros(eltype(L.coeffs), L.totdim, L.totdim) for _ in 1:length(ws)]
+    for (t, w) in enumerate(ws)
+        Lv = L(w)
+        Xis[t] = (Lv * inv(I + Lv'*CwtCw*Lv) * Lv')
+    end
+    objs1 = [real(tr(Xis[k] * Cnew' * Pinv * Cnew)) for k in 1:length(ws)]
+    objs2 = [real(tr(Xis[k] * Cnew' * Pinv * zs[k] * zs[k]' * Pinv * Cnew)) for k in 1:length(ws)]
+    return (objs1 ./ T , objs2 ./ T, (objs1 + objs2)./ T)
+end
+
+function AB_minorizing_objective(zs, ws, Cnew, model_old)
+    C, L, P= model_old.C, model_old.L, model_old.P
+    Pinv = inv(P)
+    T = length(ws)
+    Psqinv = sqrt(Pinv)
+    Cw = Psqinv * C
+    zws = [Psqinv * z for z in zs]
+    CwtCw = (Cw'*Cw)
+    Xis = [zeros(eltype(L.coeffs), L.totdim, L.totdim) for _ in 1:length(ws)]
+    for (t, w) in enumerate(ws)
+        Lv = L(w)
+        Xis[t] = (Lv * inv(I + Lv'*CwtCw*Lv) * Lv')
+    end
+    # Compute least-square mats
+    Hs = [(Xis[t] + Xis[t]*Cw'*zws[t]*zws[t]'*Cw*Xis[t]) for t in 1:length(ws)]
+    Us = [zs[t]*zws[t]'*Cw*Xis[t] for t in 1:length(ws)]
+    H  = mean(Hs)
+    U = mean(Us)
+    #obj = tr(Psqinv * Cnew * H * Cnew' * Psqinv) - 2 * real(tr(Psqinv * U * Cnew' * Psqinv))
+    obj =  norm(Psqinv * U * sqrt(inv(H)) - Psqinv * Cnew * sqrt(H))^2
+    return real(obj)
+end
+
+function make_K(H, P, chanspec)
+    chancount, N, Ncs, r0, rcs = chanspec.C, chanspec.N, chanspec.Ncs, chanspec.r0, chanspec.rcs
+    rtot = r0 + sum(rcs)
+    entry_count = N*r0 + sum([Nc * rc for (Nc, rc) in zip(Ncs, rcs)])
+    K = zeros(eltype(P), 2*N*rtot, entry_count)
+    return K
+end
+
+function make_K2(Hsq, Psq, chanspec)
+    full_K = kron(conj.(Hsq), Psq)
+    chancount, N, Ncs, r0, rcs = chanspec.C, chanspec.N, chanspec.Ncs, chanspec.r0, chanspec.rcs
+    Afake = ones(eltype(Psq), N, r0)
+    Bcsfake = [ones(eltype(Psq), Nc, rc) for (Nc, rc) in zip(Ncs, rcs)]
+    Bfake = blockdiag(Bcsfake)
+    Cfake = hcat(Afake, Bfake)
+    indices = findnz(sparse(vec(Cfake)))[1]
+    return full_K[:, indices]
+end
+
+
+
+
+function w_to_C(w, chanspec)
+    K, N, Ncs, r0, rcs = chanspec.C, chanspec.N, chanspec.Ncs, chanspec.r0, chanspec.rcs
+    w_a = w[1:(N*r0)]
+    A = reshape(w_a, N, r0)
+    Bcs = Matrix{eltype(w)}[]
+    idx = (N*r0)
+    for c in 1:K
+        w_bc = w[(idx+1):(idx+Ncs[c]*rcs[c])]
+        Bc = reshape(w_bc, Ncs[c], rcs[c])
+        push!(Bcs, Bc)
+        idx += Ncs[c]*rcs[c]
+    end
+    B = blockdiag(Bcs)
+    C = hcat(A, B)
+    return C
+end
+
+function C_to_w(C, chanspec)
+    K, N, Ncs, r0, rcs = chanspec.C, chanspec.N, chanspec.Ncs, chanspec.r0, chanspec.rcs
+    A, Bcs = extractABcs(C, Ncs, r0, rcs)
+    w_a = reshape(A, N*r0)
+    wbs = Vector{eltype(C)}[]
+    for c in 1:K
+        wb = reshape(Bcs[c], Ncs[c]*rcs[c])
+        push!(wbs, wb)
+    end
+    w = vcat(w_a, wbs...)
+    return w
+end
+
+
+function AB_minorizing_objective_comp(zs, ws, Cnew, model_old)
+    C, L, P= model_old.Ccomp, model_old.L, model_old.P
+    Pinv = inv(P)
+    T = length(ws)
+    Psqinv = sqrt(Pinv)
+    Cw = Psqinv * C
+    zws = [Psqinv * z for z in zs]
+    CwtCw = (Cw'*Cw)
+    Xis = [zeros(eltype(L.coeffs), L.totdim, L.totdim) for _ in 1:length(ws)]
+    for (t, w) in enumerate(ws)
+        Lv = L(w)
+        Xis[t] = (Lv * inv(I + Lv'*CwtCw*Lv) * Lv')
+    end
+    # Compute least-square mats
+    Hs = [(Xis[t] + Xis[t]*Cw'*zws[t]*zws[t]'*Cw*Xis[t]) for t in 1:length(ws)]
+    Us = [zs[t]*zws[t]'*Cw*Xis[t] for t in 1:length(ws)]
+    H  = mean(Hs)
+    U = mean(Us)
+    #obj = tr(Psqinv * Cnew * H * Cnew' * Psqinv) - 2 * real(tr(Psqinv * U * Cnew' * Psqinv))
+    obj =  norm(Psqinv * U * sqrt(inv(H)) - Psqinv * Cnew * sqrt(H))^2
+    return real(obj)
+end
+
+
+function QGML_objective_parts(zs, ws, model :: MFADependent)
+    Pinv = inv(model.P)
+    C = model.C
+    objs = Float64[]
+    for (z, w) in zip(zs, ws)
+        obj = 0.0
+        Lv = model.L(w)
+        H = I + Lv'*C'*Pinv*C*Lv
+        obj += log(det(H)) + log(det(model.P))
+        obj += z'*Pinv*z - z'*Pinv*C*Lv*inv(H)*Lv'*C'*Pinv*z
+        push!(objs, real(obj)/length(zs))
+    end
+    return objs
+end
+
+
+function QGML_objective_comp_parts(zs, ws, model :: MFADependent)
+    Pinv = inv(model.P)
+    C = model.Ccomp
+    objs = Float64[]
+    for (z, w) in zip(zs, ws)
+        obj = 0.0
+        Lv = model.L(w)
+        H = I + Lv'*C'*Pinv*C*Lv
+        obj += log(det(H)) + log(det(model.P))
+        obj += z'*Pinv*z - z'*Pinv*C*Lv*inv(H)*Lv'*C'*Pinv*z
+        push!(objs, real(obj)/length(zs))
+    end
+    return objs
+end
+
+
+function QGML_objective_reduc(zs, ws, model :: MFADependent)
+    tot = 0.0
+    Pinv = inv(model.P)
+    C = model.C
+    for (z, w) in zip(zs, ws)
+        Lv = model.L(w)
+        H = I + Lv'*C'*Pinv*C*Lv
+        tot += log(det(H)) - z'*Pinv*C*Lv*inv(H)*Lv'*C'*Pinv*z
     end
     return real(tot)/length(zs)
 end
@@ -107,6 +285,7 @@ function fullrandom_MFA_init(rng, cs, bs)
     model.L = MFACholeskyBSplineFunc(bs, model.L.blockdims, model.L.totdim, Complex.(init_alpha))
     realdiag_invariant!(model.L)
     identityintegral_invariant!(model.C, model.L, pi*(0.0:1/300:1.0))
+  
     extractABcs!(model.A, model.Bcs, model.C)
     blockdiag!(model.B, model.Bcs)
     return model
@@ -135,6 +314,8 @@ function time_fit(xs, model; ftol=1e-8, xtol=1e-5, maxiter=10000, Pfloor=1e-3, v
     ws = 2*pi*rfftfreq(T)
     Z = 1/sqrt(T)*rfft(X, 2)
     zs = [Z[:, t] for t in 1:(size(Z)[2])]
+    zs = zs[1:(end-1)] # delete eventually once I switch over to periodic B-splines
+    ws = ws[1:(end-1)]
     mod, tr = spectral_fit(zs, ws, model; ftol=ftol, xtol=xtol, maxiter=maxiter, Pfloor=Pfloor, verbose=verbose, keeptrace=keeptrace)
     return (mod, tr)
 end
@@ -149,13 +330,24 @@ function EM_update!(zs, ws, model; Pfloor)
     updateP!(zs, ws, model; Pfloor=Pfloor)
     println("Pre-AB: $(QGML_objective(zs, ws, model))")
     updateAB!(zs, ws, model)
+    println("Pre-Rot: $(QGML_objective(zs, ws, model))")
+    lowertri_invariant!(model.A)
+    for Bc in model.Bcs
+        lowertri_invariant!(Bc)
+    end
     println("Pre-L: $(QGML_objective(zs, ws, model))")
     updateL!(zs, ws, model)
+
     #unitloadings_invariant!(model.C, model.L)
     println("Pre-Ident: $(QGML_objective(zs, ws, model))")
     identityintegral_invariant!(model.C, model.L, ws)
     extractABcs!(model.A, model.Bcs, model.C)
+
     blockdiag!(model.B, model.Bcs)
+    model.C = hcat(model.A, model.B)
+    println("Final: $(QGML_objective(zs, ws, model))")
+    println("reduc: $(QGML_objective_reduc(zs, ws, model))")
+    println("complex: $(QGML_objective_comp(zs, ws, model))")
     return
 end
 
@@ -268,6 +460,43 @@ function updateP!(zs, ws, model; Pfloor = 1e-3)
 end
 
 
+function updateAB_fullprec!(zs, ws, model)
+    C, L, P= BigFloat.(model.C), model.L, BigFloat.(model.P)
+    Pinv = inv(P)
+    T = length(ws)
+    Psqinv = sqrt(Pinv)
+    Cw = Psqinv * C
+    zs2 = [Complex{BigFloat}.(z) for z in zs]
+    zws2 = [Psqinv * z for z in zs]
+    CwtCw = (Cw'*Cw)
+    Xis = [zeros(Complex{BigFloat}, L.totdim, L.totdim) for _ in 1:length(ws)]
+    for (t, w) in enumerate(ws)
+        Lv = Complex{BigFloat}.(L(w))
+        Xis[t] = (Lv * inv(I + Lv'*CwtCw*Lv) * Lv')
+    end
+    # Compute least-square mats
+    Hs = 1/T*[(Xis[t] + Xis[t]*Cw'*zws2[t]*zws2[t]'*Cw*Xis[t]) for t in 1:length(ws)]
+    Us = 1/T*[zs2[t]*zws2[t]'*Cw*Xis[t] for t in 1:length(ws)]
+    H = sum(Hs)
+    U = sum(Us)
+    # Compute new C
+    #Cwnew =real(U*inv(H))
+    Cnew = real(U*inv(H))#sqrt(P) * Cwnew
+    Anew, Bcsnew = extractABcs(Cnew, model.cs.Ncs, model.cs.r0, model.cs.rcs)
+    Anew = Float64.(Anew)
+    Bcsnew = [Float64.(Bc) for Bc in Bcsnew]
+    #lowertri_invariant!(Anew)
+    #for Bc in Bcsnew
+    #    lowertri_invariant!(Bc)
+    #end
+    Bnew = blockdiag(Bcsnew)
+    model.A = Anew
+    model.B = Bnew
+    model.Bcs = Bcsnew
+    model.C = hcat(Anew, Bnew)
+    return
+end
+
 function updateAB!(zs, ws, model)
     C, L, P= model.C, model.L, model.P
     Pinv = inv(P)
@@ -282,23 +511,101 @@ function updateAB!(zs, ws, model)
         Xis[t] = (Lv * inv(I + Lv'*CwtCw*Lv) * Lv')
     end
     # Compute least-square mats
-    Hs = 1/T*[(Xis[t] + Xis[t]*Cw'*zws[t]*zws[t]'*Cw*Xis[t]) for t in 1:length(ws)]
-    Us = 1/T*[zws[t]*zws[t]'*Cw*Xis[t] for t in 1:length(ws)]
-    H = sum(Hs)
-    U = sum(Us)
+    Hs = [(Xis[t] + Xis[t]*Cw'*zws[t]*zws[t]'*Cw*Xis[t]) for t in 1:length(ws)]
+    Us = [zs[t]*zws[t]'*Cw*Xis[t] for t in 1:length(ws)]
+    H  = mean(Hs)
+    U = mean(Us)
     # Compute new C
-    Cwnew =real(U*inv(H))
-    Cnew = sqrt(P) * Cwnew
-    Anew, Bcsnew = extractABcs(Cnew, model.cs.Ncs, model.cs.r0, model.cs.rcs)
-    lowertri_invariant!(Anew)
-    for Bc in Bcsnew
-        lowertri_invariant!(Bc)
-    end
+    #Cwnew =real(U*inv(H))
+    Ccomp = U  * inv(H)
+    Hsq = sqrt(H)
+    Psq = sqrt(P)
+    Kv = make_K2(Hsq, Psq, model.cs)
+    SKv = sparse(Kv)
+    K = vcat(real.(SKv), imag(SKv))
+    targ = Psq * U * inv(Hsq)
+    y = vcat(vec(real.(targ)), vec(imag.(targ)))
+    wnew = (K' * K) \ (K' * y)
+    Crnew = w_to_C(wnew, model.cs)
+    Anew, Bcsnew = extractABcs(Crnew, model.cs.Ncs, model.cs.r0, model.cs.rcs)
+
     Bnew = blockdiag(Bcsnew)
     model.A = Anew
     model.B = Bnew
     model.Bcs = Bcsnew
     model.C = hcat(Anew, Bnew)
+    model.Ccomp = Ccomp
+    return
+end
+
+
+function updateAB2!(zs, ws, model)
+    C, L, P= model.C, model.L, model.P
+    Pinv = inv(P)
+    T = length(ws)
+    Psqinv = sqrt(Pinv)
+    Cw = Psqinv * C
+    zws = [Psqinv * z for z in zs]
+    CwtCw = (Cw'*Cw)
+    Xis = [zeros(eltype(L.coeffs), L.totdim, L.totdim) for _ in 1:length(ws)]
+    for (t, w) in enumerate(ws)
+        Lv = L(w)
+        Xis[t] = (Lv * inv(I + Lv'*CwtCw*Lv) * Lv')
+    end
+    # Compute least-square mats
+    Hs = [(Xis[t] + Xis[t]*Cw'*zws[t]*zws[t]'*Cw*Xis[t]) for t in 1:length(ws)]
+    Us = [zs[t]*zws[t]'*Cw*Xis[t] for t in 1:length(ws)]
+    H  = mean(Hs)
+    U = mean(Us)
+    # Compute new C
+    #Cwnew =real(U*inv(H))
+    # New, Least squares way of computing!!!!!
+    
+    Ccomp = U  * inv(H)
+    Cnew = real(Ccomp)#sqrt(P) * Cwnew
+    Anew, Bcsnew = extractABcs(Cnew, model.cs.Ncs, model.cs.r0, model.cs.rcs)
+
+    Bnew = blockdiag(Bcsnew)
+    model.A = Anew
+    model.B = Bnew
+    model.Bcs = Bcsnew
+    model.C = hcat(Anew, Bnew)
+    model.Ccomp = Ccomp
+    return
+end
+
+
+
+function updateAB_comp!(zs, ws, model)
+    C, L, P= model.Ccomp, model.L, model.P
+    Pinv = inv(P)
+    T = length(ws)
+    Psqinv = sqrt(Pinv)
+    Cw = Psqinv * C
+    zws = [Psqinv * z for z in zs]
+    CwtCw = (Cw'*Cw)
+    Xis = [zeros(eltype(L.coeffs), L.totdim, L.totdim) for _ in 1:length(ws)]
+    for (t, w) in enumerate(ws)
+        Lv = L(w)
+        Xis[t] = (Lv * inv(I + Lv'*CwtCw*Lv) * Lv')
+    end
+    # Compute least-square mats
+    Hs = [(Xis[t] + Xis[t]*Cw'*zws[t]*zws[t]'*Cw*Xis[t]) for t in 1:length(ws)]
+    Us = [zs[t]*zws[t]'*Cw*Xis[t] for t in 1:length(ws)]
+    H  = mean(Hs)
+    U = mean(Us)
+    # Compute new C
+    #Cwnew =real(U*inv(H))
+    Ccomp = U  * inv(H)
+    Cnew = real(Ccomp)#sqrt(P) * Cwnew
+    Anew, Bcsnew = extractABcs(Cnew, model.cs.Ncs, model.cs.r0, model.cs.rcs)
+
+    Bnew = blockdiag(Bcsnew)
+    model.A = Anew
+    model.B = Bnew
+    model.Bcs = Bcsnew
+    model.C = hcat(Anew, Bnew)
+    model.Ccomp = Ccomp
     return
 end
 
