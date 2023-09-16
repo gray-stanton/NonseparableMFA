@@ -7,15 +7,15 @@ figheight <- 3.5*1.4
 convdf <- read_csv("obj_by_iteration.csv")
 convdf$niter = 1:nrow(convdf)
 convlong <- convdf %>% gather("run", "obj", x1:x15)
-p1 <- convlong %>%  filter(niter<=21) %>% ggplot(aes(x=(niter-1), y=obj, group=run)) + geom_line(color="steelblue") +
-  theme_bw() + labs(x="Iterations (s)", y="l_T Objective") + scale_x_continuous(limits = c(0, 20), breaks=c(0, 5, 10, 15, 20))
+p1 <- convlong  %>% ggplot(aes(x=(niter-1), y=obj, group=run)) + geom_line(color="steelblue") +
+  theme_bw() + labs(x="Iterations (s)", y="l_T Objective") + scale_x_continuous(limits = c(0, 40), breaks=c(0, 5, 10, 15, 20, 25, 30, 35, 40))
   
 
 ggsave("/home/gray/code/NonsepMFAJulia/convplot.pdf", p1, pdf(width=figwidth, height=figheight))
 
 
 
-nobschangedf <- read_csv("changing_nobs_NMSE2.csv")
+nobschangedf <- read_csv("changing_nobs_NMSE3.csv")
 
 
 colvals <- c("depnmse" = "coral3", indepnmse = "springgreen4", sampcovnmse="slateblue")
@@ -25,7 +25,7 @@ p2 <- nobschangedf %>% gather("series", "nmse", depnmse:sampcovnmse) %>%
   mutate(nmsedb = 10*log(nmse, 10)) %>% group_by(series, nobs) %>% 
   summarize(mnmse = mean(nmsedb)) %>%
   ggplot(aes(x=nobs, y=mnmse, color=series, shape=series)) + geom_point() + geom_line() +
-  theme_bw() + scale_x_continuous(limits=c(100, 600), breaks=c(200, 400, 600)) +
+  theme_bw() + scale_x_continuous(limits=c(100, 800), breaks=c(200, 400, 600, 800)) +
   scale_y_continuous(limits=c(-20 ,-3), breaks=c(-5, -10, -15, -20)) +
   labs(x="Number of Observations T", y="NMSE (dB)", color="Estimator", shape="Estimator") + theme(legend.position = c(0.8, 0.8)) +
   scale_color_manual(values=colvals, labels=c("Dep. MFA", "Indep. MFA", "Sample Cov.")) + scale_shape_manual(values=shapevals,labels=c("Dep. MFA", "Indep. MFA", "Sample Cov."))+

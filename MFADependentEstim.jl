@@ -330,21 +330,22 @@ function EM_update!(zs, ws, model; Pfloor)
     updateP!(zs, ws, model; Pfloor=Pfloor)
     println("Pre-AB: $(QGML_objective(zs, ws, model))")
     updateAB!(zs, ws, model)
-    println("Pre-Rot: $(QGML_objective(zs, ws, model))")
-    lowertri_invariant!(model.A)
-    for Bc in model.Bcs
-        lowertri_invariant!(Bc)
-    end
     println("Pre-L: $(QGML_objective(zs, ws, model))")
     updateL!(zs, ws, model)
+    println("Pre-Rot: $(QGML_objective(zs, ws, model))")
+    # lowertri_invariant!(model.A)
+    # for Bc in model.Bcs
+    #     lowertri_invariant!(Bc)
+    # end
+    # blockdiag!(model.B, model.Bcs)
+    # model.C = hcat(model.A, model.B)
 
     #unitloadings_invariant!(model.C, model.L)
     println("Pre-Ident: $(QGML_objective(zs, ws, model))")
     identityintegral_invariant!(model.C, model.L, ws)
     extractABcs!(model.A, model.Bcs, model.C)
 
-    blockdiag!(model.B, model.Bcs)
-    model.C = hcat(model.A, model.B)
+
     println("Final: $(QGML_objective(zs, ws, model))")
     println("reduc: $(QGML_objective_reduc(zs, ws, model))")
     println("complex: $(QGML_objective_comp(zs, ws, model))")

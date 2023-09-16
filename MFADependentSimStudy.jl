@@ -54,55 +54,55 @@ end
 
 
 
-# Graph 1, convergence
-# C=3, Ncs = [20, 15, 10], Rcs = [4, 3, 2], r0= 2
-# Power ratios are 0.3, 0.3, 0.4 resp.
-# T = 100
-using Plots
-using CSV
-using DataFrames
+# # Graph 1, convergence
+# # C=3, Ncs = [20, 15, 10], Rcs = [4, 3, 2], r0= 2
+# # Power ratios are 0.3, 0.3, 0.4 resp.
+# # T = 100
+# using Plots
+# using CSV
+# using DataFrames
 
 include("/home/gray/code/NonsepMFAJulia/MFAIndependentEstim.jl")
 
-rng = MersenneTwister(1343) #1343
-K = 4
-bs = BSplineBasis(4, pi*(0.0:1/4:1.0))
-Ncs = [20, 15, 10]
-rcs = [4, 3, 2]
-r0 = 2
-cs = ChannelSpec(Ncs, rcs, r0)
-power_ratios_by_channel = [[0.3, 0.3, 0.4] for _ in 1:length(Ncs)]
+# rng = MersenneTwister(1343) #1343
+# K = 4
+# bs = BSplineBasis(4, pi*(0.0:1/4:1.0))
+# Ncs = [20, 15, 10]
+# rcs = [4, 3, 2]
+# r0 = 2
+# cs = ChannelSpec(Ncs, rcs, r0)
+# power_ratios_by_channel = [[0.3, 0.3, 0.4] for _ in 1:length(Ncs)]
 
-trcs = []
-mods = []
-nrun = 2
-nobs = 100
-coeffmat = diagm(repeat([0.8], r0+sum(rcs)))
-innovsd = ident_AR1_innovsd(coeffmat)
-ws = rfftfreq(nobs)
-for run in 1:nrun
-    model0 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-    facs = sample_VAR1(rng, nobs, coeffmat, innovsd)
-    xs = sample_xs(rng, facs, model0.C, model0.P)
-    X = hcat(xs...)
-    ws = 2*pi*rfftfreq(nobs)
-    Z = 1/sqrt(nobs)*rfft(X, 2)
-    zs = [Z[:, t] for t in 1:(size(Z)[2])]
-    println("Run $run.")
-    model_init = default_MFA_init(cs, bs)
-    mod, trc = time_fit(xs, model_init; maxiter = 200, verbose=true, keeptrace=true)
-    push!(mods, mod)
-    push!(trcs, trc)
-end
-objs = zeros(nrun, length(trcs[1]))
-for r in 1:nrun
-    for i in 1:length(trcs[1])
-        objs[r, i] = trcs[r][i][3]
-    end
-end
+# trcs = []
+# mods = []
+# nrun = 2
+# nobs = 100
+# coeffmat = diagm(repeat([0.8], r0+sum(rcs)))
+# innovsd = ident_AR1_innovsd(coeffmat)
+# ws = rfftfreq(nobs)
+# for run in 1:nrun
+#     model0 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
+#     facs = sample_VAR1(rng, nobs, coeffmat, innovsd)
+#     xs = sample_xs(rng, facs, model0.C, model0.P)
+#     X = hcat(xs...)
+#     ws = 2*pi*rfftfreq(nobs)
+#     Z = 1/sqrt(nobs)*rfft(X, 2)
+#     zs = [Z[:, t] for t in 1:(size(Z)[2])]
+#     println("Run $run.")
+#     model_init = default_MFA_init(cs, bs)
+#     mod, trc = time_fit(xs, model_init; maxiter = 100, verbose=true, keeptrace=true)
+#     push!(mods, mod)
+#     push!(trcs, trc)
+# end
+# objs = zeros(nrun, length(trcs[1]))
+# for r in 1:nrun
+#     for i in 1:length(trcs[1])
+#         objs[r, i] = trcs[r][i][3]
+#     end
+# end
 
-objsdf = DataFrame( collect(objs'), :auto)
-CSV.write("./obj_by_iteration.csv", objsdf)
+# objsdf = DataFrame( collect(objs'), :auto)
+# CSV.write("./obj_by_iteration.csv", objsdf)
 
 
 function NMSE(model0, model1)
@@ -131,8 +131,8 @@ itrcs = []
 imods = []
 model0s = []
 refnmse = []
-nrun = 250
-nobs_vals = [100, 200, 300, 400, 500, 600]
+nrun = 400
+nobs_vals = [100, 200, 300, 400, 500, 600, 700, 800]
 arval = 0.9
 coeffmat = diagm(repeat([arval], r0+sum(rcs)))
 innovsd = ident_AR1_innovsd(coeffmat)
@@ -175,75 +175,19 @@ for nobs in nobs_vals
     end
 end 
 nmsesdf = DataFrame(mat, [:depnmse, :indepnmse, :sampcovnmse, :nobs, :run, :arval])
-CSV.write("./changing_nobs_NMSE2.csv", nmsesdf)
+CSV.write("./changing_nobs_NMSE3.csv", nmsesdf)
 
 
- ## independence.
-rng = MersenneTwister(1343)
-K = 4
-bs = BSplineBasis(3, pi*(0.0:1/4:1.0))
-Ncs = [6, 8, 10, 12]
-rcs = [1, 1, 1, 1]
-r0 = 2
-cs = ChannelSpec(Ncs, rcs, r0)
-power_ratios_by_channel = [[0.1, 0.5, 0.4] for _ in 1:length(Ncs)]
+#  ## independence.
+# rng = MersenneTwister(1343)
+# K = 4
+# bs = BSplineBasis(3, pi*(0.0:1/4:1.0))
+# Ncs = [6, 8, 10, 12]
+# rcs = [1, 1, 1, 1]
+# r0 = 2
+# cs = ChannelSpec(Ncs, rcs, r0)
+# power_ratios_by_channel = [[0.1, 0.5, 0.4] for _ in 1:length(Ncs)]
 
-
-trcs = []
-mods = []
-itrcs = []
-imods = []
-model0s = []
-refnmse = []
-nrun = 250
-nobs_vals = [100, 200, 300, 400, 500, 600]
-arval = 0.0
-coeffmat = diagm(repeat([arval], r0+sum(rcs)))
-innovsd = ident_AR1_innovsd(coeffmat)
-for nobs in nobs_vals
-    for run in 1:nrun
-        println("$nobs  Run: $run")
-        model0 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-        facs = sample_VAR1(rng, nobs, coeffmat, innovsd)
-        xs = sample_xs(rng, facs, model0.C, model0.P)
-        X = hcat(xs...)
-        ws = 2*pi*rfftfreq(nobs)
-        Z = 1/sqrt(nobs)*rfft(X, 2)
-        zs = [Z[:, t] for t in 1:(size(Z)[2])]
-        model_init1 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-        model_init2 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-        mod, trc = time_fit(xs, model_init1; maxiter=100, verbose=true, keeptrace=true)
-        imod, itrc = fit_indep(xs, model_init2; maxiter=50)
-        push!(mods, mod)
-        push!(trcs, trc)
-        push!(imods, imod)
-        push!(itrcs, itrc)
-        push!(model0s, model0)
-        push!(refnmse, norm(1/nobs * X * X' - model0.C * model0.C' - model0.P)^2/norm(model0.C*model0.C'+model0.P)^2)
-    end
-end
-
-for m in mods
-    m.C = m.C / sqrt(2*pi)
-end
-
-nmses = [NMSE(model0s[i], mods[i]) for i in 1:length(mods)]
-inmses = [NMSE(model0s[i], imods[i]) for i in 1:length(mods)]
-
-mat = zeros(length(nmses), 6)
-idx=0
-for nobs in nobs_vals
-    for run in 1:nrun
-        global idx+=1
-        mat[idx, :] = [nmses[idx], inmses[idx], refnmse[idx], nobs, run, arval]
-    end
-end 
-nmsesdf2 = DataFrame(mat, [:depnmse, :indepnmse, :sampcovnmse, :nobs, :run, :arval])
-CSV.write("./changing_nobs_NMSE_indep2.csv", nmsesdf2)
-
-
-
-# # Fig 3 - Varying AR level
 
 # trcs = []
 # mods = []
@@ -252,13 +196,13 @@ CSV.write("./changing_nobs_NMSE_indep2.csv", nmsesdf2)
 # model0s = []
 # refnmse = []
 # nrun = 250
-# nobs = 400
-# ar_vals = [0.0, 0.2, 0.4, 0.6, 0.8, 0.95]
-# for arval = ar_vals
-#     coeffmat = diagm(repeat([arval], r0+sum(rcs)))
-#     innovsd = ident_AR1_innovsd(coeffmat)
+# nobs_vals = [100, 200, 300, 400, 500, 600]
+# arval = 0.0
+# coeffmat = diagm(repeat([arval], r0+sum(rcs)))
+# innovsd = ident_AR1_innovsd(coeffmat)
+# for nobs in nobs_vals
 #     for run in 1:nrun
-#         println("$arval  Run: $run")
+#         println("$nobs  Run: $run")
 #         model0 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
 #         facs = sample_VAR1(rng, nobs, coeffmat, innovsd)
 #         xs = sample_xs(rng, facs, model0.C, model0.P)
@@ -278,10 +222,66 @@ CSV.write("./changing_nobs_NMSE_indep2.csv", nmsesdf2)
 #         push!(refnmse, norm(1/nobs * X * X' - model0.C * model0.C' - model0.P)^2/norm(model0.C*model0.C'+model0.P)^2)
 #     end
 # end
+
+# for m in mods
+#     m.C = m.C / sqrt(2*pi)
+# end
+
+# nmses = [NMSE(model0s[i], mods[i]) for i in 1:length(mods)]
+# inmses = [NMSE(model0s[i], imods[i]) for i in 1:length(mods)]
+
+# mat = zeros(length(nmses), 6)
+# idx=0
+# for nobs in nobs_vals
+#     for run in 1:nrun
+#         global idx+=1
+#         mat[idx, :] = [nmses[idx], inmses[idx], refnmse[idx], nobs, run, arval]
+#     end
+# end 
+# nmsesdf2 = DataFrame(mat, [:depnmse, :indepnmse, :sampcovnmse, :nobs, :run, :arval])
+# CSV.write("./changing_nobs_NMSE_indep2.csv", nmsesdf2)
+
+
+
+# # Fig 3 - Varying AR level
+
+trcs = [] 
+mods = []
+itrcs = []
+imods = []
+model0s = []
+refnmse = []
+nrun = 400
+nobs = 300
+ar_vals = [0.0, 0.2, 0.4, 0.6, 0.8, 0.95]
+for arval = ar_vals
+    coeffmat = diagm(repeat([arval], r0+sum(rcs)))
+    innovsd = ident_AR1_innovsd(coeffmat)
+    for run in 1:nrun
+        println("$arval  Run: $run")
+        model0 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
+        facs = sample_VAR1(rng, nobs, coeffmat, innovsd)
+        xs = sample_xs(rng, facs, model0.C, model0.P)
+        X = hcat(xs...)
+        ws = 2*pi*rfftfreq(nobs)
+        Z = 1/sqrt(nobs)*rfft(X, 2)
+        zs = [Z[:, t] for t in 1:(size(Z)[2])]
+        model_init1 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
+        model_init2 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
+        mod, trc = time_fit(xs, model_init1; maxiter=100, verbose=true, keeptrace=true)
+        imod, itrc = fit_indep(xs, model_init2; maxiter=50)
+        push!(mods, mod)
+        push!(trcs, trc)
+        push!(imods, imod)
+        push!(itrcs, itrc)
+        push!(model0s, model0)
+        push!(refnmse, norm(1/nobs * X * X' - model0.C * model0.C' - model0.P)^2/norm(model0.C*model0.C'+model0.P)^2)
+    end
+end
     
 
 
-# for m in mods
+# # for m in mods
 #     m.C = m.C / sqrt(2*pi)
 # end
 
