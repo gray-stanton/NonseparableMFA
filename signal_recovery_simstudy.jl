@@ -8,6 +8,13 @@ using DataFrames
 
 
 
+rng = MersenneTwister(1343)
+K = 4
+bs = BSplineBasis(3, pi*(0.0:1/4:1.0))
+Ncs = [15, 15]
+rcs = [1, 1]
+r0 = 2
+
 trcs = []
 mods = []
 itrcs = []
@@ -18,13 +25,6 @@ arval = 0.95
 coeffmat = diagm(repeat([arval], r0+sum(rcs)))
 innovsd = ident_AR1_innovsd(coeffmat)
 
-
-rng = MersenneTwister(1343)
-K = 4
-bs = BSplineBasis(3, pi*(0.0:1/4:1.0))
-Ncs = [15, 15]
-rcs = [1, 1]
-r0 = 2
 
 nrun = 1
 nobs=400
