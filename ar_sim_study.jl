@@ -121,7 +121,7 @@ mat = zeros(length(nmses), 6)
 idx=0
 for arval in ar_vals
     for run in 1:nrun
-        idx+=1
+        global idx+=1
         mat[idx, :] = [nmses[idx], inmses[idx], refnmse[idx], arval, run, nobs]
     end
 end 
