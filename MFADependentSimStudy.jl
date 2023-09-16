@@ -309,122 +309,69 @@ nmsesdf3 = DataFrame(mat, [:depnmse, :indepnmse, :sampcovnmse, :arval, :run, :no
 CSV.write("./changing_AR_nmsesdf.csv", nmsesdf3)
 
 
-# # Factor Prediction plot
+# Factor Prediction plot
 
-# rng = MersenneTwister(1343)
-# K = 4
-# bs = BSplineBasis(3, pi*(0.0:1/4:1.0))
-# Ncs = [5, 5]
-# rcs = [1, 1]
-# r0 = 1
-# power_ratios_by_channel = [[0.3, 0.3, 0.4] for _ in 1:length(Ncs)]
+rng = MersenneTwister(1343)
+K = 4
+bs = BSplineBasis(3, pi*(0.0:1/4:1.0))
+Ncs = [20, 20]
+rcs = [2, 2]
+r0 = 3
+power_ratios_by_channel = [[0.7, 0.2, 0.1] for _ in 1:length(Ncs)]
 
-# cs = ChannelSpec(Ncs, rcs, r0)
-# model0 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-# nobs = 600
-# arval = 0.95
-# coeffmat = diagm(repeat([arval], r0+sum(rcs)))
-# innovsd = ident_AR1_innovsd(coeffmat)
-# facs = sample_VAR1(rng, nobs, coeffmat, innovsd)
-# xs = sample_xs(rng, facs, model0.C, model0.P)
-# X = hcat(xs...)
-# ws = 2*pi*rfftfreq(nobs)
-# Z = 1/sqrt(nobs)*rfft(X, 2)
-# zs = [Z[:, t] for t in 1:(size(Z)[2])]
-# model_init1 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-# model_init2 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-# depmod, trc = time_fit(xs, model_init1; maxiter=100, verbose=true, keeptrace=true)
-# imod, itrc = fit_indep(xs, model_init2; maxiter=50)
+cs = ChannelSpec(Ncs, rcs, r0)
+model0 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
+nobs = 600
+arval = 0.95
+coeffmat = diagm(repeat([arval], r0+sum(rcs)))
+innovsd = ident_AR1_innovsd(coeffmat)
+facs = sample_VAR1(rng, nobs, coeffmat, innovsd)
+xs = sample_xs(rng, facs, model0.C, model0.P)
+X = hcat(xs...)
+ws = 2*pi*rfftfreq(nobs)
+Z = 1/sqrt(nobs)*rfft(X, 2)
+zs = [Z[:, t] for t in 1:(size(Z)[2])]
+model_init1 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
+model_init2 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
+depmod, trc = time_fit(xs, model_init1; maxiter=200, verbose=true, keeptrace=true)
+imod, itrc = fit_indep(xs, model_init2; maxiter=100)
 
-# depmod.C = depmod.C / sqrt(2*pi)
-# facpreds = factor_predict(xs, pi*(0.0:1/1000.0:1.0), depmod.C, depmod.P, MFASpecDensBSplineFunc(depmod.L))
-# ifacpreds = [imod.C'*inv(imod.C*imod.C'+imod.P) * x for x in xs]
-# true_fac_spec_dens = w -> diagm(repeat([AR1_specdens(w, arval, sqrt(1-arval^2))], r0+sum(rcs)))
-# bfacpreds = factor_predict(xs, pi*(0.0:1/1000.0:1.0), model0.C, model0.P, true_fac_spec_dens)
-# F = hcat(facs...)
-# FP = hcat(facpreds...)
-# IFP = hcat(ifacpreds...)
-# BFP = hcat(bfacpreds...) 
+depmod.C = depmod.C / sqrt(2*pi)
+depmod.A = depmod.A / sqrt(2*pi)
 
-# R1 = factor_closest_rot(F, FP)
-# R2 = factor_closest_rot(F, IFP)
-# R3 = factor_closest_rot(F, BFP)
+facpreds = factor_predict(xs, pi*(0.0:1/1000.0:1.0), depmod.C, depmod.P, MFASpecDensBSplineFunc(depmod.L))
+ifacpreds = [imod.C'*inv(imod.C*imod.C'+imod.P) * x for x in xs]
 
-# norm(F - R1 * FP)^2 / norm(F)^2
-# norm(F - R2 * IFP)^2 / norm(F)^2
-# norm(F - R3 * BFP)^2 / norm(F)^2
+spreds =  [depmod.A* fp[1:r0] for fp in facpreds]
+ispreds = [imod.A* fp[1:r0] for fp in ifacpreds]
+true_s = [model0.A * f[1:r0] for f in facs] 
+
+nms = [norm(sp - ts)^2/norm(ts)^2 for (sp, ts) in zip(spreds, true_s)]
+inms = [norm(isp - ts)^2/norm(ts)^2 for (isp, ts) in zip(ispreds, true_s)]
 
 
-# df = DataFrame(collect(hcat(F', (R1*FP)', (R2*IFP)')), [:rf1, :rf2, :rf3, :fp1, :fp2, :fp3, :ifp1, :ifp2, :ifp3])
-# CSV.write("./factor_predictions.csv", df)
+true_fac_spec_dens = w -> diagm(repeat([AR1_specdens(w, arval, sqrt(1-arval^2))], r0+sum(rcs)))
+bfacpreds = factor_predict(xs, pi*(0.0:1/1000.0:1.0), model0.C, model0.P, true_fac_spec_dens)
+F = hcat(facs...)
+FP = hcat(facpreds...)
+IFP = hcat(ifacpreds...)
+BFP = hcat(bfacpreds...) 
+
+R1 = factor_closest_rot(F, FP)
+R2 = factor_closest_rot(F, IFP)
+R3 = factor_closest_rot(F, BFP)
+
+norm(F - R1 * FP)^2 / norm(F)^2
+norm(F - R2 * IFP)^2 / norm(F)^2
+norm(F - R3 * BFP)^2 / norm(F)^2
+
+
+df = DataFrame(collect(hcat(F', (R1*FP)', (R2*IFP)')), [:rf1, :rf2, :rf3, :fp1, :fp2, :fp3, :ifp1, :ifp2, :ifp3])
+CSV.write("./factor_predictions.csv", df)
 
 
 # # Combined factor predictive error
 
-# rng = MersenneTwister(1343)
-# K = 4
-# bs = BSplineBasis(3, pi*(0.0:1/4:1.0))
-# Ncs = [5, 5]
-# rcs = [1, 1]
-# r0 = 1
-# power_ratios_by_channel = [[0.3, 0.3, 0.4] for _ in 1:length(Ncs)]
-
-# cs = ChannelSpec(Ncs, rcs, r0)
-
-# nobs_vals = [100, 200, 300, 400, 500, 600]
-
-# nrun = 5
-
-# nmse = []
-# inmse = []
-# arval = 0.8
-# coeffmat = diagm(repeat([arval], r0+sum(rcs)))
-# innovsd = ident_AR1_innovsd(coeffmat)
-# for nobs in nobs_vals
-#     for run in 1:nrun
-#         model0 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-#         facs = sample_VAR1(rng, nobs, coeffmat, innovsd)
-#         xs = sample_xs(rng, facs, model0.C, model0.P)
-#         X = hcat(xs...)
-#         ws = 2*pi*rfftfreq(nobs)
-#         Z = 1/sqrt(nobs)*rfft(X, 2)
-#         zs = [Z[:, t] for t in 1:(size(Z)[2])]
-#         model_init1 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-#         model_init2 = randomloading_MFA_init(rng, cs, bs, power_ratios_by_channel)
-#         modf, trc = time_fit(xs, model_init1; maxiter=140, verbose=true, keeptrace=true)
-#         imod, itrc = fit_indep(xs, model_init2; maxiter=70)
-
-#         modf.C = modf.C / sqrt(2*pi)
-#         facpreds = factor_predict(xs, pi*(0.0:1/1000.0:1.0), modf)
-#         ifacpreds = [imod.C'*inv(imod.C*imod.C'+imod.P) * x for x in xs]
-#         F = hcat(facs...)
-#         FP = hcat(facpreds...) * (2*pi)
-#         IFP = hcat(ifacpreds...)
-
-#         R1 = factor_closest_rot(F, FP)
-#         R2 = factor_closest_rot(F, IFP)
-
-#         f1=norm(F - R1 * FP)^2 / norm(F)^2
-#         f2=norm(F - R2 * IFP)^2 / norm(F)^2
-#         push!(nmse, f1)
-#         push!(inmse, f2)
-#     end
-# end
-
-# mat = zeros(length(nmse), 5)
-# idx = 0
-# for run in 1:nrun
-#     for nobs in nobs_vals
-#         idx += 1
-#         mat[idx, :] = [nmse[idx], inmse[idx], nobs, nrun, arval]
-#     end
-# end
-
-# ferrordf = DataFrame(mat, [:fnmse, :ifnmse, :nobs, :nrun, :arval])
-# CSV.write("./factor_errors.csv", ferrordf)
-# #model0.L = modf.L
-# #tfacpreds = factor_predict(xs, pi*(0.0:1/1000.0:1.0), model0)
-# #TFP = hcat(tfacpreds...)
 
 
 
