@@ -65,6 +65,15 @@ function NMSE(model0, model1)
     return out
 end
 
+rng = MersenneTwister(1343)
+K = 4
+bs = BSplineBasis(3, pi*(0.0:1/4:1.0))
+Ncs = [6, 8, 10, 12]
+rcs = [1, 1, 1, 1]
+r0 = 2
+cs = ChannelSpec(Ncs, rcs, r0)
+power_ratios_by_channel = [[0.1, 0.5, 0.4] for _ in 1:length(Ncs)]
+
 trcs = [] 
 mods = []
 itrcs = []
