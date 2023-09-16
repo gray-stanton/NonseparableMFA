@@ -3,6 +3,8 @@ include(".//MFADependentUtils.jl")
 include("./MFADependentEstim.jl")
 include("./MFADependentSample.jl")
 
+include("./MFAIndependentEstim.jl")
+
 using CSV
 using DataFrames
 
