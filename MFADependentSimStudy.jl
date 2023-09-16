@@ -281,23 +281,23 @@ end
     
 
 
-# # for m in mods
-#     m.C = m.C / sqrt(2*pi)
-# end
+for m in mods
+    m.C = m.C / sqrt(2*pi)
+end
 
-# nmses = [NMSE(model0s[i], mods[i]) for i in 1:length(mods)]
-# inmses = [NMSE(model0s[i], imods[i]) for i in 1:length(mods)]
+nmses = [NMSE(model0s[i], mods[i]) for i in 1:length(mods)]
+inmses = [NMSE(model0s[i], imods[i]) for i in 1:length(mods)]
 
-# mat = zeros(length(nmses), 6)
-# idx=0
-# for arval in ar_vals
-#     for run in 1:nrun
-#         idx+=1
-#         mat[idx, :] = [nmses[idx], inmses[idx], refnmse[idx], arval, run, nobs]
-#     end
-# end 
-# nmsesdf3 = DataFrame(mat, [:depnmse, :indepnmse, :sampcovnmse, :arval, :run, :nobs])
-# CSV.write("./changing_AR_nmsesdf.csv", nmsesdf3)
+mat = zeros(length(nmses), 6)
+idx=0
+for arval in ar_vals
+    for run in 1:nrun
+        idx+=1
+        mat[idx, :] = [nmses[idx], inmses[idx], refnmse[idx], arval, run, nobs]
+    end
+end 
+nmsesdf3 = DataFrame(mat, [:depnmse, :indepnmse, :sampcovnmse, :arval, :run, :nobs])
+CSV.write("./changing_AR_nmsesdf.csv", nmsesdf3)
 
 
 # # Factor Prediction plot
