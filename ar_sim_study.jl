@@ -1,8 +1,7 @@
-cd("/home/gray/code/")
-include("/home/gray/code/NonsepMFAJulia/MFADependent.jl")
-include("/home/gray/code/NonsepMFAJulia/MFADependentUtils.jl")
-include("/home/gray/code/NonsepMFAJulia/MFADependentEstim.jl")
-include("/home/gray/code/NonsepMFAJulia/MFADependentSample.jl")
+include("./NonsepMFAJulia/MFADependent.jl")
+include("./NonsepMFAJulia/MFADependentUtils.jl")
+include("./NonsepMFAJulia/MFADependentEstim.jl")
+include("./NonsepMFAJulia/MFADependentSample.jl")
 
 using CSV
 using DataFrames
@@ -55,7 +54,7 @@ end
 
 
 
-include("/home/gray/code/NonsepMFAJulia/MFAIndependentEstim.jl")
+include("./NonsepMFAJulia/MFAIndependentEstim.jl")
 
 
 
