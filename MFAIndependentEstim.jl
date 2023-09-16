@@ -13,6 +13,7 @@ function fit_indep(xs, model; ftol=1e-8, xtol=1e-5, maxiter=30)
     iter = 0
     while iter < maxiter
         oldobj = obj
+        cs = model.cs
         model.A = Hstep(S, model.B, model.P, model.cs.N, model.cs.r0)
         Sblocks = unblockdiag(S, cs.Ncs, cs.Ncs)
         idx = 0
