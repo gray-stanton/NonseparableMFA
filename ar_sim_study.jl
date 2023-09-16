@@ -1,7 +1,7 @@
-include("./NonsepMFAJulia/MFADependent.jl")
-include("./NonsepMFAJulia/MFADependentUtils.jl")
-include("./NonsepMFAJulia/MFADependentEstim.jl")
-include("./NonsepMFAJulia/MFADependentSample.jl")
+include("./MFADependent.jl")
+include(".//MFADependentUtils.jl")
+include("./MFADependentEstim.jl")
+include("./MFADependentSample.jl")
 
 using CSV
 using DataFrames
@@ -54,7 +54,7 @@ end
 
 
 
-include("./NonsepMFAJulia/MFAIndependentEstim.jl")
+include("./MFAIndependentEstim.jl")
 
 
 
