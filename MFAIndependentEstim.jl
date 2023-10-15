@@ -26,7 +26,7 @@ function fit_indep(xs, model; ftol=1e-8, xtol=1e-5, maxiter=30)
         end
         blockdiag!(model.B, model.Bcs)
         model.P = Diagonal(Σstep(S, model.A, model.B))
-        obj = QGML_objective_full(zs, ws, model)
+        obj = indep_objective(S, model)
         model.C = hcat(model.A, model.B)
         println("Iter $iter Obj: $obj")
         push!(trc, deepcopy(model))
@@ -35,7 +35,11 @@ function fit_indep(xs, model; ftol=1e-8, xtol=1e-5, maxiter=30)
     return model, trc
 end
 
-
+function indep_objective(S, model)
+    R = model.C*model.C' + model.P
+    obj = log(det(R)) + tr(inv(R)*S)
+    return obj
+end
 
 function Hstep(S, G, Σ, L, p)
     if p == 0

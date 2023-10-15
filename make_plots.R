@@ -1,5 +1,5 @@
 library(tidyverse)
-setwd("/home/gray/code/")
+setwd("/home/gray/code/NonsepMFAJulia/")
 
 
 figwidth <- 3.5*1.4
@@ -15,7 +15,7 @@ ggsave("/home/gray/code/NonsepMFAJulia/convplot.pdf", p1, pdf(width=figwidth, he
 
 
 
-nobschangedf <- read_csv("changing_nobs_NMSE3.csv")
+nobschangedf <- read_csv("/home/gray/code/changing_nobs_NMSE3.csv")
 
 
 colvals <- c("depnmse" = "coral3", indepnmse = "springgreen4", sampcovnmse="slateblue")
@@ -39,17 +39,20 @@ ggsave("/home/gray/code/NonsepMFAJulia/varynobs.pdf", p2, pdf(width=figwidth, he
 
 
 
-nobschangedf2 <- read_csv("changing_nobs_NMSE_indep2.csv")
+nobschangedf2 <- read_csv("changing_nobs_NMSE_indep2_dl.csv")
+nobschangedf3 <- read_csv("changing_nobs_NMSE_indep3.csv")
+nobschangedf4 <- read_csv("changing_nobs_NMSE_indep4.csv")
 
+nobschangeddf <- rbind(nobschangedf2, nobschangedf3, nobschangedf4)
 
 colvals <- c("depnmse" = "coral3", indepnmse = "springgreen4", sampcovnmse="slateblue")
 
-p25 <- nobschangedf2 %>% gather("series", "nmse", depnmse:sampcovnmse) %>%
-  mutate(nmsedb = 10*log(nmse, 10)) %>% group_by(series, nobs) %>% 
-  summarize(mnmse = mean(nmsedb)) %>%
-  ggplot(aes(x=nobs, y=mnmse, color=series, shape=series)) + geom_point() + geom_line() +
-  theme_bw() + scale_x_continuous(limits=c(100, 600), breaks=c(200, 400, 600)) +
-  scale_y_continuous(limits=c(-21 ,-3), breaks=c(-5, -10, -15, -20)) +
+p25 <- nobschangeddf %>% gather("series", "nmse", depnmse:sampcovnmse) %>%
+  mutate(nmsedb = 10*log(nmse, 10 )) %>% group_by(series, nobs) %>% 
+  summarize(mnmse = mean(nmsedb), sterr = sd(nmsedb)/sqrt(n()), ng=n()) %>%
+  ggplot(aes(x=nobs, y=mnmse, color=series, shape=series)) + geom_point(aes(ymax=mnmse+2*sterr, ymin=mnmse-2*sterr)) +geom_line() +
+  theme_bw() + scale_x_continuous(limits=c(100, 800), breaks=seq(100, 800, 100)) +
+  scale_y_continuous(limits=c(-25 ,-3), breaks=c(-5, -10, -15, -20)) +
   labs(x="Number of Observations T", y="NMSE (dB)", color="Estimator", shape="Estimator") + theme(legend.position = c(0.8, 0.8)) +
   scale_color_manual(values=colvals, labels=c("Dep. MFA", "Indep. MFA", "Sample Cov.")) + scale_shape_manual(values=shapevals,labels=c("Dep. MFA", "Indep. MFA", "Sample Cov.")) + theme(legend.box.background = element_rect(color="grey40", size=1.0))
 
@@ -58,7 +61,11 @@ p25 <- nobschangedf2 %>% gather("series", "nmse", depnmse:sampcovnmse) %>%
 ggsave("/home/gray/code/NonsepMFAJulia/varynobsindep.pdf", p25, pdf(width=figwidth, height=figheight))
 
 
-archangedf <- read_csv("changing_AR_nmsesdf.csv")
+archangedf1 <- read_csv("changing_AR_nmsesdf_dl1.csv")
+archangedf2 <- read_csv("changing_AR_nmsesdf2_dl2.csv")
+archangedf3 <- read_csv("changing_AR_nmsesdf3.csv")
+archangedf <- rbind(archangedf1, archangedf2, archangedf3)
+
 p3 <- archangedf %>%  gather("series", "nmse", depnmse:sampcovnmse) %>%
   mutate(nmsedb = 10*log(nmse, 10)) %>% group_by(series, arval) %>% summarize(mnmse = mean(nmsedb)) %>%
   ggplot(aes(x=arval, y=mnmse, color=series, shape=series)) + geom_point() + geom_line() + theme_bw() + scale_x_continuous(limits=c(0.0, 1.0), breaks=c(0.0, 0.2, 0.4, 0.6, 0.8, 1.0)) +
@@ -68,6 +75,23 @@ p3 <- archangedf %>%  gather("series", "nmse", depnmse:sampcovnmse) %>%
 
 
 ggsave("/home/gray/code/NonsepMFAJulia/varyingar.pdf", p3, pdf(width=figwidth, height=figheight))
+
+# Factor prediction
+facprednmse1 <- read_csv("./signal_recon_powerratio_dl1.csv")
+facprednmse2 <- read_csv("./signal_recon_powerratio2.csv")
+#facprednmse3 <- read_csv("./signal_recon_powerratio3.csv")
+facprednmse4 <- read_csv("./signal_recon_powerratio4.csv")
+
+
+facprednmse <- rbind(facprednmse1, facprednmse2, facprednmse4)
+p45 <- facprednmse %>% gather("series", "nmse", depnmse:indepnmse) %>%
+  mutate(nmsedb=10*log(nmse,10)) %>% group_by(series, prat) %>% summarize(mnmse = mean(nmsedb), std = sd(nmsedb)) %>%
+  ggplot(aes(x=prat, y=mnmse, color=series, shape=series)) + geom_point() + geom_line() + theme_bw() + scale_x_continuous(limits=c(0.0, 0.6), breaks=seq(0.0, 0.6, 0.1) )+
+  labs(x="Signal Power Ratio", y="Time-Averaged NMSE (dB)", color="Estimator", shape="Estimator") + theme(legend.position = c(0.6, 0.8)) +
+  scale_color_manual(values=colvals[c(1,2)], labels=c("Dep. MFA", "Indep. MFA")) + scale_shape_manual(values=shapevals[c(1,2)],labels=c("Dep. MFA", "Indep. MFA")) +theme(legend.box.background = element_rect(color="grey40", size=1.0))
+
+
+ggsave("/home/gray/code/NonsepMFAJulia/factorpower.pdf", p45, pdf(width=figwidth, height=figheight))
 
 
 facerrordf<- read_csv("factor_errors.csv")
@@ -140,3 +164,24 @@ p10 <- covfits %>% filter(h<=15) %>% ggplot(aes(x=h)) + geom_point(aes(y=truecov
 
 ggsave("/home/gray/code/NonsepMFAJulia/covfit1.pdf", p9, pdf(width=figwidth, height=figheight))
 ggsave("/home/gray/code/NonsepMFAJulia/covfit2.pdf", p10, pdf(width=figwidth, height=figheight))
+
+
+
+
+
+
+hyp_altdf <- read_csv("./hyptest_alternative.csv")
+hyp_nulldf <- read_csv("./hyptest_null.csv")
+
+hyp_altdf <- hyp_altdf %>% mutate(dep_diff = dep_HA - dep_H0, indep_diff = indep_HA - indep_H0)
+hyp_nulldf <- hyp_nulldf %>% mutate(dep_diff = dep_HA - dep_H0, indep_diff = indep_HA - indep_H0)
+
+dep_thresh <- quantile(hyp_nulldf$dep_diff, 0.95)
+indep_thresh <- quantile(hyp_nulldf$indep_diff, 0.95)
+sing_thresh <- quantile(hyp_nulldf$singcrit, 0.95)
+
+
+hyp_altdf$dep_pickalt <- hyp_altdf$dep_diff > dep_thresh
+hyp_altdf$indep_pickalt <- hyp_altdf$indep_diff > indep_thresh
+hyp_altdf$sing_pickalt <- hyp_altdf$singcrit > sing_thresh
+
